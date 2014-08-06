@@ -5,11 +5,11 @@ from django.conf import settings
 from django.db.models import F
 
 from django.contrib.contenttypes.models import ContentType
+from django.contrib.auth.models import User
 from django.contrib.contenttypes import generic
 
 from django.dispatch import Signal
 
-AUTH_USER_MODEL = getattr(settings, 'AUTH_USER_MODEL', 'auth.User')
 
 # SIGNALS #
 
@@ -78,7 +78,7 @@ class HitCount(models.Model):
     hits            = models.PositiveIntegerField(default=0)
     modified        = models.DateTimeField(default=datetime.datetime.utcnow)
     content_type    = models.ForeignKey(ContentType,
-                        verbose_name="content type",
+                        verbose_name="content cype",
                         related_name="content_type_set_for_%(class)s",)
     object_pk       = models.TextField('object ID')
     content_object  = generic.GenericForeignKey('content_type', 'object_pk')
@@ -161,7 +161,7 @@ class Hit(models.Model):
     ip              = models.CharField(max_length=40, editable=False)
     session         = models.CharField(max_length=40, editable=False)
     user_agent      = models.CharField(max_length=255, editable=False)
-    user            = models.ForeignKey(AUTH_USER_MODEL, null=True, editable=False)
+    user            = models.ForeignKey(User,null=True, editable=False)
     hitcount        = models.ForeignKey(HitCount, editable=False)
 
     class Meta:
@@ -222,4 +222,55 @@ class BlacklistUserAgent(models.Model):
 
     def __unicode__(self):
         return u'%s' % self.user_agent
+
+
+
+
+
+from django.db.models import signals
+from django.db.models import signals
+
+
+from django.db.models.signals import post_save, pre_save
+
+
+# method for updating
+def update_count_and_alive(sender, instance, **kwargs):
+    hit_obj = HitCount.objects.get( id = instance.id )
+
+    if str( hit_obj.content_type.name ) == 'movie':
+        movieobj = hit_obj.content_object
+        if movieobj.views:
+            movieobj.views = int( movieobj.views ) + 1
+        else:
+            movieobj.views = 1
+        movieobj.last_seen = datetime.datetime.now()
+        movieobj.save()
+
+    elif str( hit_obj.content_type.name ) == 'episode':
+
+        episodeobj = hit_obj.content_object
+        if episodeobj.episodeviews:
+            episodeobj.episodeviews = int( episodeobj.episodeviews ) + 1
+        else:
+            episodeobj.episodeviews = 1
+        episodeobj.episodelast_seen = datetime.datetime.now()
+        episodeobj.save()
+
+
+        if episodeobj.series.views:
+            episodeobj.series.views = int( episodeobj.series.views ) + 1
+        else:
+            episodeobj.series.views = 1
+        episodeobj.series.last_seen = datetime.datetime.now()
+        episodeobj.series.save()
+
+
+
+
+# register the signal
+post_save.connect(update_count_and_alive, sender=HitCount, dispatch_uid="update_stock_count")
+
+
+#post_save.connect(update_count_and_alive, sender=Hit, dispatch_uid="update_stock_count")
 
